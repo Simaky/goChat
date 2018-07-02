@@ -24,7 +24,12 @@ func getMessage(connection net.Conn) {
 func sendMessage(connection net.Conn) {
 	for {
 		reader := bufio.NewReader(os.Stdin)
-		text, _ := reader.ReadString('\n')
+		text, err := reader.ReadString('\n')
+
+		if err != nil {
+			fmt.Println("Error: ", err.Error())
+			return
+		}
 
 		fmt.Fprintf(connection, text) //send to conn
 	}
@@ -32,7 +37,10 @@ func sendMessage(connection net.Conn) {
 
 func main() {
 
-	connection, err := net.Dial("tcp", "localhost:8080")
+	argsAddress := os.Args[1]
+	argsPort := os.Args[2]
+
+	connection, err := net.Dial("tcp", argsAddress + ":" + argsPort)
 
 	if err != nil {
 		fmt.Println("Error: " + err.Error())

@@ -5,24 +5,40 @@ import (
 	"log"
 	"bufio"
 	"fmt"
+	"os"
+	"sync"
 )
 
-var Users = make(map[net.Conn]string)
+type Users struct {
+	sync.Mutex
+	data map[net.Conn]user
+}
+
+type user struct {
+	userName string
+}
+
 var newConnections = make(chan net.Conn)
 var messages = make(chan string)
 
-func handleClient(connection net.Conn) {
+func handleClient(connection net.Conn, users *Users) {
+
+	var newUser user
 
 	fmt.Fprint(connection, "Enter user name: ")
 
 	userName := bufio.NewScanner(connection)
 	userName.Scan()
 
-	Users[connection] = userName.Text()
+	newUser.userName = userName.Text()
+
+	users.Lock()
+	users.data[connection] = newUser
+	users.Unlock()
 
 	log.Println(userName.Text() + " connected")
+	messages <- fmt.Sprintln("User " + userName.Text() + " connected")
 
-	fmt.Fprintln(connection, "Hi "+userName.Text())
 
 	for {
 
@@ -30,26 +46,32 @@ func handleClient(connection net.Conn) {
 
 		if err != nil {
 			log.Println("User " + userName.Text() + " disconnected")
-			delete(Users, connection)
+			messages <- fmt.Sprintln("User " + userName.Text() + " disconnected")
+			users.Lock()
+			delete(users.data, connection)
+			users.Unlock()
 			connection.Close()
 			return
 		}
 
 		messages <- fmt.Sprintf(userName.Text() + ": " + buffer)
 		log.Print(userName.Text() + ": " + buffer)
+
 	}
 
 }
 
-func handleMessage(connection net.Conn, message string, userName string) {
+func handleMessage(connection net.Conn, message string, userName string, users *Users) {
 
 	_, err := connection.Write([]byte(message))
 
 	if err != nil {
 		log.Println("User " + userName + " disconnected")
-		delete(Users, connection)
+		messages <- fmt.Sprintln("User " + userName + " disconnected")
+		users.Lock()
+		delete(users.data, connection)
+		users.Unlock()
 		connection.Close()
-		return
 	}
 }
 
@@ -60,7 +82,6 @@ func acceptNewClient(server net.Listener) {
 
 		if err != nil {
 			log.Println("User can't join to server. Error: ", err.Error())
-			return
 		}
 		newConnections <- client //write client to newConnections canal
 	}
@@ -69,8 +90,12 @@ func acceptNewClient(server net.Listener) {
 func main() {
 
 	log.Println("Server is running!")
+	var users Users
+	users.data = make(map[net.Conn]user)
 
-	server, err := net.Listen("tcp", ":8080")
+	argsPort := os.Args[1]
+
+	server, err := net.Listen("tcp", ":"+argsPort)
 
 	if err != nil {
 		log.Println("Can't start server! Error: ", err.Error())
@@ -82,11 +107,11 @@ func main() {
 		select {
 
 		case connection := <-newConnections:
-			go handleClient(connection)
+			go handleClient(connection, &users)
 
 		case message := <-messages:
-			for client, userName := range Users {
-				handleMessage(client, message, userName)
+			for client, user := range users.data {
+				handleMessage(client, message, user.userName, &users)
 			}
 		}
 	}
