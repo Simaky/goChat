@@ -5,8 +5,8 @@ import (
 	"log"
 	"bufio"
 	"fmt"
-	"os"
 	"sync"
+	"flag"
 )
 
 type Users struct {
@@ -93,9 +93,11 @@ func main() {
 	var users Users
 	users.data = make(map[net.Conn]user)
 
-	argsPort := os.Args[1]
+	var ip = flag.String("ip","localhost","Server IP Address")
+	var port = flag.String("port","8080","Server Port")
+	flag.Parse()
 
-	server, err := net.Listen("tcp", ":"+argsPort)
+	server, err := net.Listen("tcp", *ip + ":" + *port)
 
 	if err != nil {
 		log.Println("Can't start server! Error: ", err.Error())

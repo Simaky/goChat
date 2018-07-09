@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"bufio"
 	"os"
+	"flag"
 )
 
 func getMessage(connection net.Conn) {
@@ -37,11 +38,11 @@ func sendMessage(connection net.Conn) {
 
 func main() {
 
-	argsAddress := os.Args[1]
-	argsPort := os.Args[2]
+	var ip = flag.String("ip","localhost","Server IP Address")
+	var port = flag.String("port","8080","Server Port")
+	flag.Parse()
 
-	connection, err := net.Dial("tcp", argsAddress + ":" + argsPort)
-
+	connection, err := net.Dial("tcp", *ip + ":" + *port)
 	if err != nil {
 		fmt.Println("Error: " + err.Error())
 		return
