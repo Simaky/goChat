@@ -18,8 +18,13 @@ type user struct {
 	userName string
 }
 
+type message struct {
+	message string
+	user    net.Conn
+}
+
 var newConnections = make(chan net.Conn)
-var messages = make(chan string)
+var messages = make(chan message)
 
 func handleClient(connection net.Conn, users *Users) {
 
@@ -30,6 +35,13 @@ func handleClient(connection net.Conn, users *Users) {
 	userName := bufio.NewScanner(connection)
 	userName.Scan()
 
+	for _, user := range users.data {
+		if user.userName == userName.Text() {
+			fmt.Fprint(connection, "Error: This name is already in use.\n")
+			handleClient(connection, users)
+		}
+	}
+
 	newUser.userName = userName.Text()
 
 	users.Lock()
@@ -37,8 +49,13 @@ func handleClient(connection net.Conn, users *Users) {
 	users.Unlock()
 
 	log.Println(userName.Text() + " connected")
-	messages <- fmt.Sprintln("User " + userName.Text() + " connected")
 
+	var test message
+
+	test.user = connection
+	test.message = fmt.Sprintln("User " + userName.Text() + " connected")
+
+	messages <- test
 
 	for {
 
@@ -46,7 +63,8 @@ func handleClient(connection net.Conn, users *Users) {
 
 		if err != nil {
 			log.Println("User " + userName.Text() + " disconnected")
-			messages <- fmt.Sprintln("User " + userName.Text() + " disconnected")
+			test.message = fmt.Sprintln("User " + userName.Text() + " disconnected")
+			messages <- test
 			users.Lock()
 			delete(users.data, connection)
 			users.Unlock()
@@ -54,24 +72,25 @@ func handleClient(connection net.Conn, users *Users) {
 			return
 		}
 
-		messages <- fmt.Sprintf(userName.Text() + ": " + buffer)
+		test.message = fmt.Sprintf(userName.Text() + ": " + buffer)
+		messages <- test
 		log.Print(userName.Text() + ": " + buffer)
 
 	}
 
 }
 
-func handleMessage(connection net.Conn, message string, userName string, users *Users) {
+func handleMessage(client net.Conn, message string, userName string, users *Users) {
 
-	_, err := connection.Write([]byte(message))
+	_, err := client.Write([]byte(message))
 
 	if err != nil {
 		log.Println("User " + userName + " disconnected")
-		messages <- fmt.Sprintln("User " + userName + " disconnected")
+		//messages <- fmt.Sprintln("User " + userName + " disconnected")
 		users.Lock()
-		delete(users.data, connection)
+		delete(users.data, client)
 		users.Unlock()
-		connection.Close()
+		client.Close()
 	}
 }
 
@@ -93,8 +112,8 @@ func main() {
 	var users Users
 	users.data = make(map[net.Conn]user)
 
-	var ip = flag.String("ip","localhost","Server IP Address")
-	var port = flag.String("port","8080","Server Port")
+	var ip = flag.String("ip", "localhost", "Server IP Address")
+	var port = flag.String("port", "8080", "Server Port")
 	flag.Parse()
 
 	server, err := net.Listen("tcp", *ip + ":" + *port)
@@ -107,13 +126,14 @@ func main() {
 
 	for {
 		select {
-
 		case connection := <-newConnections:
 			go handleClient(connection, &users)
 
 		case message := <-messages:
 			for client, user := range users.data {
-				handleMessage(client, message, user.userName, &users)
+				if message.user != client {
+					handleMessage(client, message.message, user.userName, &users)
+				}
 			}
 		}
 	}
