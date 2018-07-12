@@ -50,12 +50,12 @@ func handleClient(connection net.Conn, users *Users) {
 
 	log.Println(userName.Text() + " connected")
 
-	var test message
+	var userMessage message
 
-	test.user = connection
-	test.message = fmt.Sprintln("User " + userName.Text() + " connected")
+	userMessage.user = connection
+	userMessage.message = fmt.Sprintln("User " + userName.Text() + " connected")
 
-	messages <- test
+	messages <- userMessage
 
 	for {
 
@@ -63,8 +63,8 @@ func handleClient(connection net.Conn, users *Users) {
 
 		if err != nil {
 			log.Println("User " + userName.Text() + " disconnected")
-			test.message = fmt.Sprintln("User " + userName.Text() + " disconnected")
-			messages <- test
+			userMessage.message = fmt.Sprintln("User " + userName.Text() + " disconnected")
+			messages <- userMessage
 			users.Lock()
 			delete(users.data, connection)
 			users.Unlock()
@@ -72,8 +72,8 @@ func handleClient(connection net.Conn, users *Users) {
 			return
 		}
 
-		test.message = fmt.Sprintf(userName.Text() + ": " + buffer)
-		messages <- test
+		userMessage.message = fmt.Sprintf(userName.Text() + ": " + buffer)
+		messages <- userMessage
 		log.Print(userName.Text() + ": " + buffer)
 
 	}
@@ -86,7 +86,6 @@ func handleMessage(client net.Conn, message string, userName string, users *User
 
 	if err != nil {
 		log.Println("User " + userName + " disconnected")
-		//messages <- fmt.Sprintln("User " + userName + " disconnected")
 		users.Lock()
 		delete(users.data, client)
 		users.Unlock()
